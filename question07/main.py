@@ -47,16 +47,28 @@ def split_image(f: np.ndarray, block_size: int, padding: str = "zero") -> np.nda
 
     # 只在底部和右侧补齐，左上角仍然是原图 [0, 0]。
     # 第 4 题也使用 zero/replicate，但为了卷积在四周填充；这里的填充位置不同。
+    # np.pad 为每个维度接收一对数：(前面补多少, 后面补多少)。
+    # 对图像就是 ((上, 下), (左, 右))，不是 ((高, 宽), (高, 宽))。
+    # 例如 3×5 图按 2×2 分块，要补成 4×6，此处得到 ((0, 1), (0, 1))。
     pad_width = ((0, padded_height - height), (0, padded_width - width))
     if f.ndim == 3:
         # 第三个维度是颜色通道，不能往通道维度补像素。
+        # ((0, 0),) 是只含一对数的元组；末尾逗号保留外面这一层元组。
+        # += 在这里拼接元组，得到 ((上, 下), (左, 右), (0, 0))。
         pad_width += ((0, 0),)
     if padding == "zero":
+        # constant 指固定值填充，constant_values=0 指定补入黑色像素。
         padded = np.pad(f, pad_width, mode="constant", constant_values=0)
     else:
+        # 前面已检查 padding 的合法性，因此这里对应 replicate。
+        # edge 复制最近边界值；RGB 情况复制完整的三个通道，不改变原数组 f。
         padded = np.pad(f, pad_width, mode="edge")
 
     # f.shape[2:]：灰度图为 ()，RGB 图为 (3,)，从而用同一写法构造输出形状。
+    # 例如六个 2×2 块：灰度为 (6, 2, 2)，RGB 为 (6, 2, 2, 3)。
+    # 下面的 + 是形状元组的拼接；dtype=f.dtype 表示保留原像素的数据类型。
+    # empty 只分配空间，不把元素初始化为 0；此时还不能读取其中的值作为结果。
+    # 后面的循环会给每个 patches[index] 完整赋值，全部填好后才返回。
     patches = np.empty(
         (rows * columns, block_size, block_size) + f.shape[2:], dtype=f.dtype
     )
@@ -64,6 +76,7 @@ def split_image(f: np.ndarray, block_size: int, padding: str = "zero") -> np.nda
     for row in range(rows):
         for column in range(columns):
             index = row * columns + column
+            # columns 是每行的块数；向右一块编号加 1，向下一块编号加 columns。
             top = row * block_size
             left = column * block_size
             # 切片不包括右端点，所以每次正好取 block_size 行、block_size 列。
@@ -102,6 +115,7 @@ def reconstruct_image(patches: np.ndarray, original_shape: tuple) -> np.ndarray:
         (rows * block_size, columns * block_size) + original_shape[2:],
         dtype=patches.dtype,
     )
+    # 与分块时相反：将每个小块放回大画布的对应位置；每处都会被赋值。
     for row in range(rows):
         for column in range(columns):
             index = row * columns + column
