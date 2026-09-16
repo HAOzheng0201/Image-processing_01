@@ -1,0 +1,12 @@
+name: imageproc_hw01
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pillow
+  - matplotlib
+  - scipy
+  - scikit-image
+  - opencv
